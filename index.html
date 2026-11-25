@@ -178,6 +178,12 @@ ul.plain strong { font-weight: 700; }
 }
 .pop h3 { margin: 0 24px 4px 0; font-size: 1.0625rem; line-height: 1.4; }
 .pop p { margin: 0; }
+.pop-links { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 10px; }
+.pop-links a {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px;
+  border: 2px solid var(--link); border-radius: 999px;
+  color: var(--link); font-weight: 700; text-decoration: none;
+}
 .leaflet-container .leaflet-control-attribution {
   background: var(--attr-bg); color: var(--text); font-size: 1rem; line-height: 1.4; padding: 2px 8px;
 }
@@ -564,6 +570,20 @@ ul.plain strong { font-weight: 700; }
     d.textContent = p.desc;
     box.appendChild(h);
     box.appendChild(d);
+    const links = document.createElement('div');
+    links.className = 'pop-links';
+    [
+      ['Google 地圖', 'https://www.google.com/maps/search/?api=1&query=' + p.lat + ',' + p.lng],
+      ['Google Earth 3D', 'https://earth.google.com/web/@' + p.lat + ',' + p.lng + ',0a,500d,35y,0h,60t,0r']
+    ].forEach(function (x) {
+      const a = document.createElement('a');
+      a.href = x[1];
+      a.textContent = x[0];
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';   // 唔將本頁網址傳畀 Google
+      links.appendChild(a);
+    });
+    box.appendChild(links);
     return box;
   }
 
