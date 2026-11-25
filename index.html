@@ -179,11 +179,26 @@ ul.plain strong { font-weight: 700; }
 .pop h3 { margin: 0 24px 4px 0; font-size: 1.0625rem; line-height: 1.4; }
 .pop p { margin: 0; }
 .pop-links { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 10px; }
-.pop-links a {
+.pop-links a, .pop-links button {
   display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px;
-  border: 2px solid var(--link); border-radius: 999px;
-  color: var(--link); font-weight: 700; text-decoration: none;
+  border: 2px solid var(--link); border-radius: 999px; background: transparent;
+  color: var(--link); font: inherit; font-weight: 700; text-decoration: none; cursor: pointer;
 }
+.pop .pop-note { margin-top: 8px; color: var(--muted); }
+
+/* Google 3D 面板 */
+.view3d { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); overflow: hidden; scroll-margin-top: calc(var(--nav-h) + 8px); }
+.view3d-head { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; }
+.view3d-head h3 { flex: 1; margin: 0; font-size: 1.0625rem; line-height: 1.4; }
+.view3d-head button {
+  flex: none; min-height: 44px; padding: 0 16px;
+  border: 2px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text);
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.view3d-stage { position: relative; height: 50vh; height: 50svh; min-height: 300px; background: var(--tint); }
+@media (min-width: 720px) { .view3d-stage { height: 420px; } }
+.view3d-stage > * { display: block; width: 100%; height: 100%; }
+.view3d-note { padding: 10px 14px 12px; }
 .leaflet-container .leaflet-control-attribution {
   background: var(--attr-bg); color: var(--text); font-size: 1rem; line-height: 1.4; padding: 2px 8px;
 }
@@ -353,6 +368,15 @@ ul.plain strong { font-weight: 700; }
       <p class="map-note" id="map-note" role="status" hidden>地圖底圖未能載入，請檢查網絡連線。下方地點清單仍可使用。</p>
     </div>
 
+    <div class="view3d" id="view3d" hidden>
+      <div class="view3d-head">
+        <h3 id="view3d-title"></h3>
+        <button type="button" id="view3d-close">關閉</button>
+      </div>
+      <div class="view3d-stage" id="view3d-stage" role="region" aria-label="Google 3D 地圖" hidden></div>
+      <div class="view3d-note" id="view3d-note" role="status" hidden></div>
+    </div>
+
     <ul class="legend" aria-label="圖例">
       <li><span class="pin pin-meeting" aria-hidden="true"></span>集合點</li>
       <li><span class="pin pin-route" aria-hidden="true"></span>路線地點</li>
@@ -506,6 +530,12 @@ ul.plain strong { font-weight: 700; }
 
   /* ===================================================================== */
 
+  // Google 3D 地圖（可選）
+  // 留空：popup 只有「Google 地圖」同「Google Earth 3D」連結，頁面完全唔會連線 Google 嘅程式碼。
+  // 填咗 key：popup 會多一個「3D 地圖」掣，撳咗先載入 Google 嘅程式碼同 3D 地圖。
+  // key 必須喺 Google Cloud 限制到呢個網址，並設預算上限。
+  const GOOGLE_MAPS_API_KEY = '';
+
   const TYPES = {
     meeting:  { label: '集合點',   size: 30, hit: 44, z: 1000 },
     route:    { label: '路線地點', size: 22, hit: 32, z: 500 },
@@ -517,6 +547,10 @@ ul.plain strong { font-weight: 700; }
   const wrapEl = document.getElementById('map-wrap');
   const noteEl = document.getElementById('map-note');
   const listEl = document.getElementById('place-list');
+  const view3dEl = document.getElementById('view3d');
+  const title3d = document.getElementById('view3d-title');
+  const stage3d = document.getElementById('view3d-stage');
+  const note3d = document.getElementById('view3d-note');
   const filterBtns = Array.prototype.slice.call(document.querySelectorAll('[data-filter]'));
 
   const markers = new Map();
@@ -570,22 +604,120 @@ ul.plain strong { font-weight: 700; }
     d.textContent = p.desc;
     box.appendChild(h);
     box.appendChild(d);
-    const links = document.createElement('div');
-    links.className = 'pop-links';
-    [
-      ['Google 地圖', 'https://www.google.com/maps/search/?api=1&query=' + p.lat + ',' + p.lng],
-      ['Google Earth 3D', 'https://earth.google.com/web/@' + p.lat + ',' + p.lng + ',0a,500d,35y,0h,60t,0r']
-    ].forEach(function (x) {
-      const a = document.createElement('a');
-      a.href = x[1];
-      a.textContent = x[0];
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';   // 唔將本頁網址傳畀 Google
-      links.appendChild(a);
-    });
-    box.appendChild(links);
+    box.appendChild(linkRow(p, !!GOOGLE_MAPS_API_KEY));
+    if (GOOGLE_MAPS_API_KEY) {
+      const n = document.createElement('p');
+      n.className = 'pop-note';
+      n.textContent = '撳「3D 地圖」才會連線至 Google。';
+      box.appendChild(n);
+    }
     return box;
   }
+
+  function chipLink(label, href) {
+    const a = document.createElement('a');
+    a.href = href;
+    a.textContent = label;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';   // 唔將本頁網址傳畀 Google
+    return a;
+  }
+
+  // embed = true：「3D 地圖」掣（撳先載入）；false：Google Earth 連結
+  function linkRow(p, embed) {
+    const row = document.createElement('div');
+    row.className = 'pop-links';
+    row.appendChild(chipLink('Google 地圖', 'https://www.google.com/maps/search/?api=1&query=' + p.lat + ',' + p.lng));
+    if (embed) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = '3D 地圖';
+      b.addEventListener('click', function () { open3D(p); });
+      row.appendChild(b);
+    } else {
+      row.appendChild(chipLink('Google Earth 3D', 'https://earth.google.com/web/@' + p.lat + ',' + p.lng + ',0a,500d,35y,0h,60t,0r'));
+    }
+    return row;
+  }
+
+  /* ---------- Google 3D 地圖（撳掣先載入）---------- */
+  let googleLib = null;     // Promise：Google 嘅 maps3d library
+  let map3d = null, marker3d = null, load3dToken = 0, current3d = null;
+
+  function loadGoogle() {
+    if (googleLib) return googleLib;
+    googleLib = new Promise(function (resolve, reject) {
+      window.__gmapsReady = resolve;
+      window.gm_authFailure = function () { fail3D(); };   // key 未授權、未啟用計費等
+      const s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_MAPS_API_KEY) +
+              '&v=weekly&loading=async&language=zh-HK&region=HK&callback=__gmapsReady';
+      s.onerror = function () { s.remove(); googleLib = null; reject(new Error('load')); };   // 網絡問題：下次可以再試
+      document.head.appendChild(s);
+    }).then(function () { return google.maps.importLibrary('maps3d'); });
+    return googleLib;
+  }
+
+  function show3dNote(msg, p) {
+    note3d.textContent = '';
+    note3d.hidden = !msg;
+    if (!msg) return;
+    note3d.appendChild(document.createTextNode(msg));
+    if (p) note3d.appendChild(linkRow(p, false));
+  }
+
+  function clear3D() {
+    if (map3d) map3d.remove();
+    map3d = null; marker3d = null;
+    stage3d.textContent = '';
+    stage3d.hidden = true;
+  }
+
+  function fail3D() {
+    if (view3dEl.hidden) return;
+    clear3D();
+    show3dNote('未能載入 Google 3D 地圖（網絡問題，或 API key 設定有誤）。你可以用以下連結。', current3d);
+  }
+
+  function open3D(p) {
+    const token = ++load3dToken;
+    current3d = p;
+    view3dEl.hidden = false;
+    title3d.textContent = p.name;
+    show3dNote('載入中……');
+    view3dEl.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    loadGoogle().then(function (lib) {
+      if (token !== load3dToken || view3dEl.hidden) return;
+      const center = { lat: p.lat, lng: p.lng, altitude: 0 };
+      const cam = { center: center, range: 500, tilt: 60, heading: 0 };
+      if (!map3d) {
+        map3d = new lib.Map3DElement(Object.assign({ mode: 'HYBRID' }, cam));
+        stage3d.textContent = '';
+        stage3d.appendChild(map3d);
+        stage3d.hidden = false;
+      } else if (typeof map3d.flyCameraTo === 'function' && !reduceMotion) {
+        map3d.flyCameraTo({ endCamera: cam, durationMillis: 1500 });
+      } else {
+        Object.assign(map3d, cam);
+      }
+      try {
+        if (marker3d) marker3d.remove();
+        marker3d = new lib.Marker3DElement({ position: center, label: p.name, altitudeMode: 'CLAMP_TO_GROUND' });
+        map3d.append(marker3d);
+      } catch (e) { marker3d = null; }   // 標記出事都唔好影響地圖
+      show3dNote('');
+    }).catch(function () {
+      if (token === load3dToken) fail3D();
+    });
+  }
+
+  function close3D() {
+    load3dToken++;
+    view3dEl.hidden = true;
+    clear3D();
+  }
+  document.getElementById('view3d-close').addEventListener('click', close3D);
 
   // popup 最闊唔可以超過地圖（連內邊距同 autoPan 邊距），細機仔（360px）都要放得入
   function popupMax() {
