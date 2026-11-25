@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>「聽見社區的腳步」義工資訊包</title>
+<meta name="description" content="「聽見社區的腳步」義工資訊包">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#582F13" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#2B1E15" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23EA8B31'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23582F13'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+
+<style>
+/* ========== 顏色（暖橙啡色系）========== */
+:root {
+  --bg: #FAF2E9;          /* 米色背景 */
+  --card: #FFFCF8;
+  --text: #582F13;        /* 深啡 */
+  --muted: #7A5233;
+  --line: #EAD7C1;
+  --accent: #EA8B31;      /* 主色 */
+  --accent-ink: #582F13;  /* 主色上面嘅字 */
+  --link: #8F4208;
+  --tint: #FDEBD6;
+  --focus: #1F5FBF;
+  --hero-bg: #582F13;
+  --hero-text: #FAF2E9;
+  --hero-sub: #F6D3A8;
+  --meeting: #C62828;     /* 集合點：紅 */
+  --route: #EA8B31;       /* 路線地點：橙 */
+  --building: #582F13;    /* 具體建築：啡 */
+  --attr-bg: rgba(255, 252, 248, .92);
+  --shadow: 0 1px 2px rgba(88, 47, 19, .08), 0 4px 14px rgba(88, 47, 19, .08);
+  --nav-h: 56px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1F1510;
+    --card: #2B1E15;
+    --text: #F6E9DA;
+    --muted: #D2BCA5;
+    --line: #4A3626;
+    --accent: #EA8B31;
+    --accent-ink: #2B1507;
+    --link: #F4AA62;
+    --tint: #3B281A;
+    --focus: #8DB8FF;
+    --hero-bg: #3A2112;
+    --hero-text: #FAF2E9;
+    --hero-sub: #F2BE86;
+    --attr-bg: rgba(43, 30, 21, .92);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .3);
+  }
+}
+
+/* ========== 基本 ========== */
+*, *::before, *::after { box-sizing: border-box; }
+html { font-size: 100%; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans TC", "PingFang HK", "Microsoft JhengHei", system-ui, sans-serif;
+  font-size: 1rem;           /* 16px */
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+[hidden] { display: none !important; }
+a { color: var(--link); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.wrap { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+
+/* ========== 頂部標題 ========== */
+.hero {
+  background: var(--hero-bg);
+  color: var(--hero-text);
+  border-bottom: 4px solid var(--accent);
+  padding: calc(28px + env(safe-area-inset-top)) 0 24px;
+}
+.hero h1 { margin: 0; font-size: clamp(1.75rem, 8vw, 2.5rem); line-height: 1.25; letter-spacing: .04em; }
+.hero .sub { margin: 10px 0 0; color: var(--hero-sub); }
+.hero .sub span { display: inline-block; }
+
+/* ========== 黏頂導覽列 ========== */
+.nav {
+  position: sticky; top: 0; z-index: 1000;
+  height: var(--nav-h);
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.nav .scroller {
+  display: flex; gap: 8px; align-items: center;
+  max-width: 720px; height: 100%; margin: 0 auto; padding: 0 16px;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
+}
+.nav .scroller::-webkit-scrollbar { display: none; }
+.nav a {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  min-height: 40px; padding: 0 14px;
+  border-radius: 999px;
+  color: var(--text); text-decoration: none; font-weight: 500;
+  white-space: nowrap;
+}
+.nav a:hover { background: var(--tint); }
+.nav a[aria-current="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+/* ========== 卡片 ========== */
+main { padding-bottom: 8px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 20px 16px;
+  margin: 16px 0;
+  scroll-margin-top: calc(var(--nav-h) + 12px);
+}
+.card h2 {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 12px; font-size: 1.375rem; line-height: 1.35;
+}
+.card h2::before { content: ""; flex: none; width: 6px; height: 1.2em; border-radius: 3px; background: var(--accent); }
+.card p { margin: 0 0 12px; }
+.card p:last-child { margin-bottom: 0; }
+.note { padding: 10px 14px; background: var(--tint); border-radius: 10px; color: var(--text); }
+
+ul.plain { list-style: none; margin: 0; padding: 0; }
+ul.plain > li { position: relative; padding: 8px 0 8px 22px; border-top: 1px solid var(--line); }
+ul.plain > li:first-child { border-top: 0; }
+ul.plain > li::before { content: ""; position: absolute; left: 4px; top: 1.05em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+ul.plain strong { font-weight: 700; }
+.nw { white-space: nowrap; }
+
+/* ========== 地圖 ========== */
+.map-wrap { position: relative; scroll-margin-top: calc(var(--nav-h) + 8px); }
+#map-canvas {
+  position: relative; z-index: 0; isolation: isolate;   /* 令 Leaflet 嘅 z-index 唔會蓋住導覽列 */
+  height: 60vh; height: 60svh; min-height: 320px;
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  background: #E8E0D2;
+}
+@media (min-width: 720px) { #map-canvas { height: 480px; } }
+.map-note {
+  position: absolute; z-index: 5; left: 12px; right: 12px; bottom: 48px;
+  margin: 0 !important; padding: 10px 14px; border-radius: 10px;
+  background: var(--card); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+
+/* 標記（形狀同顏色雙重區分）*/
+/* 點擊範圍做成圓形，好似 route 同 building 相近嗰陣，撳建築中心唔會撳中隔離個圓點 */
+.pin-wrap { display: flex; align-items: center; justify-content: center; background: none; border: 0; border-radius: 50%; }
+.pin { display: block; flex: none; box-sizing: border-box; border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0, 0, 0, .5); }
+.pin-meeting  { position: relative; width: 30px; height: 30px; border-radius: 50%; background: var(--meeting); }
+.pin-meeting::after { content: ""; position: absolute; inset: 0; margin: auto; width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+.pin-route    { width: 22px; height: 22px; border-radius: 50%; background: var(--route); }
+.pin-building { width: 16px; height: 16px; border-radius: 4px; background: var(--building); }
+.leaflet-marker-icon:focus-visible .pin { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+/* Leaflet 預設字細過 16px，全部放大 */
+.leaflet-container { font: inherit; font-size: 1rem; line-height: 1.6; }
+.leaflet-popup-content-wrapper { background: var(--card); color: var(--text); border-radius: 12px; }
+.leaflet-popup-tip { background: var(--card); }
+.leaflet-popup-content { margin: 12px 14px; font-size: 1rem; line-height: 1.6; }
+.leaflet-container a.leaflet-popup-close-button {
+  top: 2px; right: 2px; width: 40px; height: 40px; font: 24px/40px sans-serif; color: var(--muted);
+}
+.pop h3 { margin: 0 24px 4px 0; font-size: 1.0625rem; line-height: 1.4; }
+.pop p { margin: 0; }
+.leaflet-container .leaflet-control-attribution {
+  background: var(--attr-bg); color: var(--text); font-size: 1rem; line-height: 1.4; padding: 2px 8px;
+}
+.leaflet-control-attribution a { color: var(--link); }
+.leaflet-touch .leaflet-bar a, .leaflet-bar a {
+  width: 40px; height: 40px; line-height: 40px; font-size: 1.375rem;
+  background: var(--card); color: var(--text); border-color: var(--line);
+}
+.leaflet-touch .leaflet-bar a:hover, .leaflet-bar a:hover { background: var(--tint); }
+.leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out { font-size: 1.375rem; }
+@media (prefers-color-scheme: dark) {
+  .leaflet-tile-pane { filter: brightness(.82) contrast(1.05) saturate(.9); }
+}
+
+/* 圖例 */
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 14px 0 0; padding: 0; }
+.legend li { display: flex; align-items: center; gap: 8px; }
+.legend .pin { box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); }
+
+/* 篩選 */
+.filters { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 14px 0 0; }
+@media (min-width: 480px) { .filters { grid-template-columns: repeat(4, 1fr); } }
+.filters button {
+  min-height: 48px; padding: 0 12px;
+  border: 2px solid var(--line); border-radius: 12px;
+  background: var(--card); color: var(--text);
+  font: inherit; font-weight: 500; cursor: pointer;
+}
+.filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+/* 地點列表 */
+#place-list { margin-top: 16px; }
+.group { margin: 0 0 14px; --c: var(--route); }
+.group[data-type="meeting"] { --c: var(--meeting); }
+.group[data-type="building"] { --c: var(--building); }
+.group h3 { margin: 0 0 6px; padding-left: 10px; border-left: 5px solid var(--c); font-size: 1rem; line-height: 1.5; }
+.group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.place {
+  display: block; width: 100%; min-height: 48px; padding: 8px 14px; text-align: left;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--text);
+  font: inherit; cursor: pointer;
+}
+.place:hover { background: var(--tint); }
+.place.is-active { border-color: var(--accent); background: var(--tint); box-shadow: inset 4px 0 0 var(--accent); }
+
+/* ========== 當日流程（時間軸）========== */
+.timeline { list-style: none; margin: 14px 0 0; padding: 0 0 0 22px; position: relative; }
+.timeline::before { content: ""; position: absolute; left: 6px; top: 10px; bottom: 18px; width: 2px; background: var(--line); }
+.seg {
+  position: relative; display: flex; flex-direction: column; justify-content: center;
+  /* 高度按時長比例（每分鐘 2.6px），但最少 84px，確保 15 分鐘嗰段唔會塞 */
+  min-height: max(84px, calc(var(--min) * 2.6px));
+  margin: 0 0 8px; padding: 10px 14px;
+  background: var(--tint); border-left: 4px solid var(--accent); border-radius: 10px;
+}
+.seg::before { content: ""; position: absolute; left: -22px; top: 14px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 3px solid var(--card); }
+.seg-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.seg-time { font-weight: 700; }
+.seg-dur { color: var(--muted); font-weight: 500; }
+.seg-name { margin-top: 2px; }
+
+/* ========== 訪問問題（accordion）========== */
+.acc { display: grid; gap: 8px; margin-top: 14px; }
+.acc details { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); overflow: hidden; }
+.acc summary {
+  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px;
+  list-style: none; cursor: pointer; font-weight: 700;
+}
+.acc summary::-webkit-details-marker { display: none; }
+.acc .num {
+  flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); font-weight: 700;
+}
+.acc .topic { flex: 1; }
+.acc summary::after {
+  content: ""; flex: none; width: 10px; height: 10px; margin-right: 4px;
+  border-right: 3px solid var(--muted); border-bottom: 3px solid var(--muted);
+  transform: rotate(45deg); transition: transform .2s;
+}
+.acc details[open] summary::after { transform: rotate(-135deg); }
+.acc details[open] summary { border-bottom: 1px solid var(--line); background: var(--tint); }
+.acc .q { margin: 0; padding: 12px 14px 14px; }
+@media (prefers-reduced-motion: reduce) { .acc summary::after { transition: none; } }
+
+/* ========== 出發前準備（checklist）========== */
+.check { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.check label {
+  display: flex; align-items: flex-start; gap: 12px; min-height: 52px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer;
+}
+.check input {
+  -webkit-appearance: none; appearance: none; flex: none;
+  display: grid; place-content: center;
+  width: 28px; height: 28px; margin: 0; margin-top: 1px;
+  border: 2px solid var(--text); border-radius: 7px; background: var(--card); cursor: pointer;
+}
+.check input::before {
+  content: ""; width: 14px; height: 8px; margin-top: -3px;
+  border-left: 3px solid var(--accent-ink); border-bottom: 3px solid var(--accent-ink);
+  transform: rotate(-45deg) scale(0);
+}
+.check input:checked { background: var(--accent); border-color: var(--accent); }
+.check input:checked::before { transform: rotate(-45deg) scale(1); }
+.check input:checked + span { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px; }
+
+/* ========== 聯絡 ========== */
+.contacts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.contacts li { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.contacts .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.chip {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
+  border-radius: 999px; font-weight: 700; text-decoration: none;
+  background: var(--accent); color: var(--accent-ink); border: 2px solid var(--accent);
+}
+.chip.alt { background: transparent; color: var(--link); border-color: var(--link); }
+
+/* ========== 頁底 ========== */
+.foot { padding: 8px 0 calc(28px + env(safe-area-inset-bottom)); text-align: center; color: var(--muted); }
+.foot p { margin: 0; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>聽見社區的腳步</h1>
+    <p class="sub"><span>2026 年 12 月 5 日（星期六）</span><span>12:30–17:00｜主辦：香港明愛</span></p>
+  </div>
+</header>
+
+<nav class="nav" id="nav" aria-label="頁面導覽">
+  <div class="scroller" id="nav-scroller">
+    <a href="#info">活動資料</a>
+    <a href="#map">地圖</a>
+    <a href="#schedule">當日流程</a>
+    <a href="#roles">義工角色</a>
+    <a href="#background">當區背景</a>
+    <a href="#questions">訪問問題</a>
+    <a href="#photo">拍攝及相冊</a>
+    <a href="#safety">安全及私隱</a>
+    <a href="#prep">出發前準備</a>
+    <a href="#contact">聯絡</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- 活動資料 -->
+  <section class="card" id="info" aria-labelledby="h-info">
+    <h2 id="h-info">活動資料</h2>
+    <ul class="plain">
+      <li><strong>主辦單位：</strong>香港明愛</li>
+      <li><strong>日期：</strong>2026 年 12 月 5 日（星期六）</li>
+      <li><strong>時間：</strong>12:30–17:00</li>
+      <li><strong>集合地點：</strong>觀塘翠屏北邨翠榕樓地下 <span class="nw">11–14 號</span></li>
+      <li><strong>內容：</strong>與長者導賞員遊覽觀塘社區，進行訪問及拍攝，返回中心後即場印相，一同製作手作相冊送贈長者</li>
+      <li><strong>分組：</strong>每組 <span class="nw">1–2 位</span>長者導賞員，配 <span class="nw">3–4 位</span>義工；路線包括翠屏邨、和樂邨、裕民坊及觀塘工業區</li>
+    </ul>
+  </section>
+
+  <!-- 地圖 -->
+  <section class="card" id="map" aria-labelledby="h-map">
+    <h2 id="h-map">地圖</h2>
+    <div class="map-wrap" id="map-wrap">
+      <div id="map-canvas" role="region" aria-label="地圖"></div>
+      <p class="map-note" id="map-note" role="status" hidden>地圖底圖未能載入，請檢查網絡連線。下方地點清單仍可使用。</p>
+    </div>
+
+    <ul class="legend" aria-label="圖例">
+      <li><span class="pin pin-meeting" aria-hidden="true"></span>集合點</li>
+      <li><span class="pin pin-route" aria-hidden="true"></span>路線地點</li>
+      <li><span class="pin pin-building" aria-hidden="true"></span>具體建築</li>
+    </ul>
+
+    <div class="filters" role="group" aria-label="篩選">
+      <button type="button" data-filter="all" aria-pressed="true">全部</button>
+      <button type="button" data-filter="meeting" aria-pressed="false">集合點</button>
+      <button type="button" data-filter="route" aria-pressed="false">路線地點</button>
+      <button type="button" data-filter="building" aria-pressed="false">具體建築</button>
+    </div>
+
+    <div id="place-list"></div>
+  </section>
+
+  <!-- 當日流程 -->
+  <section class="card" id="schedule" aria-labelledby="h-schedule">
+    <h2 id="h-schedule">當日流程</h2>
+    <p class="note">時間屬暫定，同工會按當日情況及長者體力調整。</p>
+    <ol class="timeline">
+      <li class="seg" style="--min:30"><div class="seg-top"><span class="seg-time">12:30–13:00</span><span class="seg-dur">30分鐘</span></div><div class="seg-name">集合、分組及簡介</div></li>
+      <li class="seg" style="--min:30"><div class="seg-top"><span class="seg-time">13:00–13:30</span><span class="seg-dur">30分鐘</span></div><div class="seg-name">迎接長者、破冰交流</div></li>
+      <li class="seg" style="--min:75"><div class="seg-top"><span class="seg-time">13:30–14:45</span><span class="seg-dur">75分鐘</span></div><div class="seg-name">社區導賞、訪問及拍攝</div></li>
+      <li class="seg" style="--min:20"><div class="seg-top"><span class="seg-time">14:45–15:05</span><span class="seg-dur">20分鐘</span></div><div class="seg-name">陪同長者返回中心、小休</div></li>
+      <li class="seg" style="--min:60"><div class="seg-top"><span class="seg-time">15:05–16:05</span><span class="seg-dur">60分鐘</span></div><div class="seg-name">選相及印相、與長者一同製作相冊</div></li>
+      <li class="seg" style="--min:15"><div class="seg-top"><span class="seg-time">16:05–16:20</span><span class="seg-dur">15分鐘</span></div><div class="seg-name">送贈相冊、大合照</div></li>
+      <li class="seg" style="--min:40"><div class="seg-top"><span class="seg-time">16:20–17:00</span><span class="seg-dur">40分鐘</span></div><div class="seg-name">義工分享及總結</div></li>
+    </ol>
+  </section>
+
+  <!-- 義工角色 -->
+  <section class="card" id="roles" aria-labelledby="h-roles">
+    <h2 id="h-roles">義工角色</h2>
+    <p>長者是當日的導賞員，義工是聆聽者及記錄者。請跟隨長者的步伐，多聆聽，並追問其生活故事。每組分工如下：</p>
+    <ul class="plain">
+      <li><strong>訪問員：</strong>帶動對話及追問，留意長者是否疲倦</li>
+      <li><strong>記錄員：</strong>記下人名、地點、年份及長者的說話，供撰寫相冊文字</li>
+      <li><strong>拍攝員：</strong>以手機拍攝相片及花絮</li>
+    </ul>
+  </section>
+
+  <!-- 觀塘區背景 -->
+  <section class="card" id="background" aria-labelledby="h-background">
+    <h2 id="h-background">觀塘區背景</h2>
+    <ul class="plain">
+      <li><strong>觀塘：</strong>古時為官府鹽場，鹽田狀似池塘，故稱「官塘」，1950 年代發展後改稱「觀塘」。</li>
+      <li><strong>翠屏邨：</strong>前身為觀塘首個徙置屋邨，俗稱「雞寮」，於 1980 至 90 年代重建；1970 年代明愛已在雞寮提供服務。</li>
+      <li><strong>和樂邨：</strong>1960 年代初落成的廉租屋邨，是觀塘歷史最悠久的公共屋邨之一。</li>
+      <li><strong>裕民坊：</strong>1950 年代起為觀塘市中心，昔日銀行、金舖、戲院及茶樓林立；市建局於 2007 年展開重建。</li>
+      <li><strong>觀塘工業區（駿業里一帶）：</strong>1950 至 60 年代填海而成，街名多帶「業」字；昔日紗廠、製衣廠林立，1990 年代起工廈陸續改為商廈。</li>
+    </ul>
+  </section>
+
+  <!-- 參考訪問問題 -->
+  <section class="card" id="questions" aria-labelledby="h-questions">
+    <h2 id="h-questions">參考訪問問題</h2>
+    <p>長者事前已收到以下題目，或會選擇部分分享，亦可能帶備舊相片或紀念物品。毋須逐題發問；題目中的「觀塘」可按路線改為翠屏邨、和樂邨或裕民坊。</p>
+    <div class="acc">
+      <details><summary><span class="num">1</span><span class="topic">家的風景</span></summary><p class="q">您家裡最令您感到舒服、放鬆的一個角落是哪裡？為什麼？</p></details>
+      <details><summary><span class="num">2</span><span class="topic">街坊鄰里</span></summary><p class="q">在觀塘住了這麼久，有沒有哪位鄰居或店鋪老闆，讓您覺得特別親切、像家人一樣？</p></details>
+      <details><summary><span class="num">3</span><span class="topic">日常購物</span></summary><p class="q">您平時最喜歡去哪一家店鋪買東西（例如：翠屏或和樂的街市攤檔、裕民坊的老店）？和老闆熟絡嗎？</p></details>
+      <details><summary><span class="num">4</span><span class="topic">飲食記憶</span></summary><p class="q">在觀塘，有沒有哪一味食物或哪一間餐廳，是您吃了幾十年都覺得「最好味」的？</p></details>
+      <details><summary><span class="num">5</span><span class="topic">休閒去處</span></summary><p class="q">以前和現在，您茶餘飯後最喜歡去觀塘哪裡行一行、坐一坐？</p></details>
+      <details><summary><span class="num">6</span><span class="topic">工作生涯</span></summary><p class="q">您的工作經歷，和觀塘有過什麼故事或聯繫嗎？（例如：在工業區的工廠上班、在裕民坊一帶工作）</p></details>
+      <details><summary><span class="num">7</span><span class="topic">交通變遷</span></summary><p class="q">您還記得以前是怎樣從觀塘出九龍、過海去港島的嗎？和現在搭地鐵相比，感覺有什麼不同？</p></details>
+      <details><summary><span class="num">8</span><span class="topic">珍藏物件</span></summary><p class="q">有沒有一樣物件，每次看到它，都會讓您想起在觀塘的某段舊時光？</p></details>
+      <details><summary><span class="num">9</span><span class="topic">社區變化</span></summary><p class="q">在您眼中，觀塘最大、最令您有感觸的一個變化是什麼？（可以是建築、環境或人情，例如：裕民坊重建、工廈變商廈）</p></details>
+      <details><summary><span class="num">10</span><span class="topic">祝福與展望</span></summary><p class="q">如果請您對現在在觀塘生活或工作的年輕人說幾句話，您最想說什麼？</p></details>
+    </div>
+  </section>
+
+  <!-- 拍攝及相冊 -->
+  <section class="card" id="photo" aria-labelledby="h-photo">
+    <h2 id="h-photo">拍攝及相冊</h2>
+    <ul class="plain">
+      <li>拍攝前，先徵得長者同意；在店鋪內拍攝須先問准店主</li>
+      <li>每個停留點拍攝一張長者照片，並與長者拍攝一張組合照</li>
+      <li>返回中心前選定約 10 張相片，以 WhatsApp 傳送給跟組同工打印</li>
+      <li>以雙面膠紙及相角貼相，每頁配上長者的說話或小故事</li>
+      <li>避免拍攝路人及小朋友的容貌</li>
+    </ul>
+  </section>
+
+  <!-- 安全及私隱 -->
+  <section class="card" id="safety" aria-labelledby="h-safety">
+    <h2 id="h-safety">安全及私隱</h2>
+    <ul class="plain">
+      <li>按長者步速前行，有需要時詢問長者是否需要休息</li>
+      <li>攙扶長者前，先詢問對方意願</li>
+      <li>過馬路、上落斜路及樓梯時放慢腳步，並提早提示路況</li>
+      <li>全組同行，切勿離隊；如遇突發情況，即時通知同工或致電 Tommy Sir/吳姑娘</li>
+      <li>切勿把長者相片或影片上載至個人社交平台</li>
+      <li>1972 年翠屏道曾發生山泥傾瀉，部分長者或有親身經歷，請勿主動追問</li>
+      <li>如遇雨天，活動改為室內訪談，同工會即日通知</li>
+    </ul>
+  </section>
+
+  <!-- 出發前準備 -->
+  <section class="card" id="prep" aria-labelledby="h-prep">
+    <h2 id="h-prep">出發前準備</h2>
+    <ul class="check">
+      <li><label><input type="checkbox" autocomplete="off"><span>細閱本資訊包，從參考問題中揀選 3 題，並構思追問</span></label></li>
+      <li><label><input type="checkbox" autocomplete="off"><span>決定擔任訪問員、記錄員或拍攝員</span></label></li>
+      <li><label><input type="checkbox" autocomplete="off"><span>攜帶已充電的手機、行動電源、合適鞋履及飲用水</span></label></li>
+      <li><label><input type="checkbox" autocomplete="off"><span>未滿 18 歲者：簽妥家長同意書，於活動當日交予同工</span></label></li>
+    </ul>
+  </section>
+
+  <!-- 聯絡 -->
+  <section class="card" id="contact" aria-labelledby="h-contact">
+    <h2 id="h-contact">聯絡</h2>
+    <ul class="contacts">
+      <li>負責社工 Tommy Sir（許先生），<span class="nw">電話／WhatsApp：</span><span class="actions"><a class="chip" href="tel:+85292300127">9230 0127</a><a class="chip alt" href="https://wa.me/85292300127" target="_blank" rel="noopener">WhatsApp</a></span></li>
+      <li>負責社工 吳姑娘，<span class="nw">電話／WhatsApp：</span><span class="actions"><a class="chip" href="tel:+85260335671">6033 5671</a><a class="chip alt" href="https://wa.me/85260335671" target="_blank" rel="noopener">WhatsApp</a></span></li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap"><p>地圖位置僅供參考</p></div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* =====================================================================
+     地點資料（全部集中喺度）
+     type: "meeting" 集合點 ｜ "route" 路線地點 ｜ "building" 具體建築
+     所有座標都係估算，verified: false 代表未核對。
+     具體建築嘅 desc 一律先寫「（待補充）」，等負責同工填。
+     ===================================================================== */
+  const PLACES = [
+    { id: 'meeting-tsui-yung', name: '翠榕樓（觀塘翠屏北邨翠榕樓地下 11–14 號）', type: 'meeting',  lat: 22.3170, lng: 114.2300, desc: '活動集合地點', verified: false }, // 待核對
+
+    { id: 'route-tsui-ping',   name: '翠屏邨',               type: 'route',    lat: 22.3140, lng: 114.2310, desc: '前身為觀塘首個徙置屋邨，俗稱「雞寮」，於 1980 至 90 年代重建；1970 年代明愛已在雞寮提供服務。', verified: false }, // 待核對
+    { id: 'route-lok-wah',     name: '和樂邨',               type: 'route',    lat: 22.3155, lng: 114.2235, desc: '1960 年代初落成的廉租屋邨，是觀塘歷史最悠久的公共屋邨之一。', verified: false }, // 待核對
+    { id: 'route-yue-man',     name: '裕民坊',               type: 'route',    lat: 22.3125, lng: 114.2255, desc: '1950 年代起為觀塘市中心，昔日銀行、金舖、戲院及茶樓林立；市建局於 2007 年展開重建。', verified: false }, // 待核對
+    { id: 'route-industrial',  name: '觀塘工業區（駿業里一帶）', type: 'route',    lat: 22.3105, lng: 114.2215, desc: '1950 至 60 年代填海而成，街名多帶「業」字；昔日紗廠、製衣廠林立，1990 年代起工廈陸續改為商廈。', verified: false }, // 待核對
+
+    { id: 'bldg-tsui-ping-mall',   name: '翠屏商場',   type: 'building', lat: 22.3149, lng: 114.2319, desc: '（待補充）', verified: false }, // 待核對（座標只係放喺翠屏邨附近嘅估算位置）
+    { id: 'bldg-tsui-ping-market', name: '翠屏街市',   type: 'building', lat: 22.3131, lng: 114.2301, desc: '（待補充）', verified: false }, // 待核對（座標只係放喺翠屏邨附近嘅估算位置）
+    { id: 'bldg-lok-wah-mall',     name: '和樂邨商場', type: 'building', lat: 22.3164, lng: 114.2246, desc: '（待補充）', verified: false }, // 待核對（座標只係放喺和樂邨附近嘅估算位置）
+    { id: 'bldg-lok-wah-market',   name: '和樂街市',   type: 'building', lat: 22.3146, lng: 114.2224, desc: '（待補充）', verified: false }, // 待核對（座標只係放喺和樂邨附近嘅估算位置）
+    { id: 'bldg-chun-yip',         name: '駿業里',     type: 'building', lat: 22.3096, lng: 114.2228, desc: '（待補充）', verified: false }, // 待核對（座標只係放喺工業區附近嘅估算位置）
+    { id: 'bldg-how-ming',         name: '巧明街',     type: 'building', lat: 22.3112, lng: 114.2203, desc: '（待補充）', verified: false }  // 待核對（座標只係放喺工業區附近嘅估算位置）
+  ];
+
+  /* ===================================================================== */
+
+  const TYPES = {
+    meeting:  { label: '集合點',   size: 30, hit: 44, z: 1000 },
+    route:    { label: '路線地點', size: 22, hit: 32, z: 500 },
+    building: { label: '具體建築', size: 16, hit: 28, z: 0 }
+  };
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mapEl = document.getElementById('map-canvas');
+  const wrapEl = document.getElementById('map-wrap');
+  const noteEl = document.getElementById('map-note');
+  const listEl = document.getElementById('place-list');
+  const filterBtns = Array.prototype.slice.call(document.querySelectorAll('[data-filter]'));
+
+  const markers = new Map();
+  let map = null;
+  let layer = null;
+  let flyToken = 0;
+
+  /* ---------- 地點清單 ---------- */
+  function buildList() {
+    ['meeting', 'route', 'building'].forEach(function (type) {
+      const items = PLACES.filter(function (p) { return p.type === type; });
+      if (!items.length) return;
+      const sec = document.createElement('section');
+      sec.className = 'group';
+      sec.dataset.type = type;
+      const h = document.createElement('h3');
+      h.textContent = TYPES[type].label;
+      const ul = document.createElement('ul');
+      items.forEach(function (p) {
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'place';
+        btn.dataset.id = p.id;
+        btn.textContent = p.name;
+        btn.addEventListener('click', function () { openPlace(p.id); });
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+      sec.appendChild(h);
+      sec.appendChild(ul);
+      listEl.appendChild(sec);
+    });
+  }
+
+  function setActive(id) {
+    listEl.querySelectorAll('.place').forEach(function (b) {
+      const on = b.dataset.id === id;
+      b.classList.toggle('is-active', on);
+      if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+    });
+  }
+
+  /* ---------- 地圖 ---------- */
+  function makePopup(p) {
+    const box = document.createElement('div');
+    box.className = 'pop';
+    const h = document.createElement('h3');
+    h.textContent = p.name;
+    const d = document.createElement('p');
+    d.textContent = p.desc;
+    box.appendChild(h);
+    box.appendChild(d);
+    return box;
+  }
+
+  // popup 最闊唔可以超過地圖（連內邊距同 autoPan 邊距），細機仔（360px）都要放得入
+  function popupMax() {
+    return Math.max(150, Math.min(260, mapEl.clientWidth - 56));
+  }
+
+  // popup 如果被黏頂導覽列遮住或者出咗畫面，就將頁面捲到睇得見
+  function revealPopup() {
+    const el = document.querySelector('.leaflet-popup');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const top = document.getElementById('nav').offsetHeight + 8;
+    let dy = 0;
+    if (r.top < top) dy = r.top - top;
+    else if (r.bottom > window.innerHeight - 8) dy = r.bottom - window.innerHeight + 8;
+    if (dy) window.scrollBy({ top: dy, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+
+  function visiblePlaces(type) {
+    return PLACES.filter(function (p) { return type === 'all' || p.type === type; });
+  }
+
+  function fitTo(places, animate) {
+    const b = L.latLngBounds(places.map(function (p) { return [p.lat, p.lng]; }));
+    map.fitBounds(b, {
+      padding: [48, 48],
+      maxZoom: places.length > 1 ? 17 : 16,
+      animate: !!animate && !reduceMotion
+    });
+  }
+
+  function buildMap() {
+    map = L.map(mapEl, {
+      attributionControl: false,
+      zoomSnap: 0.5,
+      scrollWheelZoom: false    // 桌面版：撳過地圖先可以用滾輪縮放，避免捲動頁面時誤觸
+    });
+    map.on('focus', function () { map.scrollWheelZoom.enable(); });
+    map.on('blur', function () { map.scrollWheelZoom.disable(); });
+
+    L.control.attribution({
+      prefix: mapEl.clientWidth >= 330 ? '<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>' : false
+    }).addTo(map);
+
+    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    let loaded = 0, failed = 0;
+    tiles.on('tileload', function () { loaded++; noteEl.hidden = true; });
+    tiles.on('tileerror', function () { failed++; if (!loaded && failed >= 3) noteEl.hidden = false; });
+
+    layer = L.layerGroup().addTo(map);
+
+    PLACES.forEach(function (p) {
+      const t = TYPES[p.type];
+      const icon = L.divIcon({
+        className: 'pin-wrap',
+        html: '<span class="pin pin-' + p.type + '"></span>',
+        iconSize: [t.hit, t.hit],
+        iconAnchor: [t.hit / 2, t.hit / 2],
+        popupAnchor: [0, -(t.size / 2 + 4)]
+      });
+      const m = L.marker([p.lat, p.lng], {
+        icon: icon, title: p.name, zIndexOffset: t.z, riseOnHover: true, keyboard: true
+      });
+      m.bindPopup(makePopup(p), { maxWidth: popupMax(), minWidth: 150, autoPanPaddingTopLeft: [8, 96], autoPanPaddingBottomRight: [8, 8] });
+      m.on('add', function () {
+        const el = m.getElement();
+        if (el) el.setAttribute('aria-label', p.name);
+      });
+      m.on('popupopen', function () { setActive(p.id); setTimeout(revealPopup, 350); });
+      m.on('popupclose', function () { setActive(null); });
+      markers.set(p.id, m);
+    });
+
+    map.on('resize', function () {
+      markers.forEach(function (m) { m.getPopup().options.maxWidth = popupMax(); });
+    });
+
+    applyFilter('all', false);
+  }
+
+  function applyFilter(type, animate) {
+    filterBtns.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.filter === type));
+    });
+    listEl.querySelectorAll('.group').forEach(function (g) {
+      g.hidden = !(type === 'all' || g.dataset.type === type);
+    });
+    if (!map) return;
+    const shown = visiblePlaces(type);
+    layer.clearLayers();
+    shown.forEach(function (p) { layer.addLayer(markers.get(p.id)); });
+    fitTo(shown, animate);
+  }
+
+  function openPlace(id) {
+    const m = markers.get(id);
+    if (!m || !map) return;
+    forced = -1;
+    wrapEl.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    const target = m.getLatLng();
+    const zoom = Math.max(map.getZoom(), 17);
+    const token = ++flyToken;
+    function open() { if (token === flyToken && !m.isPopupOpen()) m.openPopup(); }
+    if (reduceMotion) {
+      map.setView(target, zoom, { animate: false });
+      open();
+      return;
+    }
+    map.once('moveend', open);
+    map.flyTo(target, zoom, { duration: 0.9 });
+    setTimeout(open, 1600);   // 保險：如果 moveend 冇觸發
+  }
+
+  /* ---------- 篩選掣 ---------- */
+  filterBtns.forEach(function (b) {
+    b.addEventListener('click', function () { applyFilter(b.dataset.filter, true); });
+  });
+
+  /* ---------- 導覽列：而家睇緊邊部分 ---------- */
+  const nav = document.getElementById('nav');
+  const scroller = document.getElementById('nav-scroller');
+  const navLinks = Array.prototype.slice.call(nav.querySelectorAll('a'));
+  const sections = navLinks.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+  let activeIdx = -2, ticking = false;
+  let forced = -1;   // 撳咗導覽列嗰項：頁尾捲唔到頂嘅部分（例如「出發前準備」）都照樣亮嗰項，直到用家自己再捲
+
+  function updateNav() {
+    ticking = false;
+    const line = nav.offsetHeight + 24;
+    let idx = -1;
+    sections.forEach(function (s, i) { if (s.getBoundingClientRect().top <= line) idx = i; });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) idx = sections.length - 1;
+    if (forced >= 0) idx = forced;
+    if (idx === activeIdx) return;
+    activeIdx = idx;
+    navLinks.forEach(function (a, i) {
+      if (i === idx) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+    if (idx >= 0) {
+      const a = navLinks[idx];
+      scroller.scrollTo({
+        left: a.offsetLeft - (scroller.clientWidth - a.offsetWidth) / 2,
+        behavior: reduceMotion ? 'auto' : 'smooth'
+      });
+    }
+  }
+  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(updateNav); } }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function (ev) {
+    window.addEventListener(ev, function () { forced = -1; }, { passive: true });
+  });
+  navLinks.forEach(function (a, i) {
+    a.addEventListener('click', function () { forced = i; updateNav(); });
+  });
+
+  /* ---------- 啟動 ---------- */
+  buildList();
+  if (typeof L === 'undefined') {
+    noteEl.hidden = false;      // Leaflet 載入唔到：清單仍然可以睇
+  } else {
+    buildMap();
+  }
+  updateNav();
+})();
+</script>
+</body>
+</html>
