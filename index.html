@@ -610,7 +610,7 @@ ul.plain strong { font-weight: 700; }
   const el3 = document.getElementById('map3d-canvas');
   const TILE_NOTE = '地圖底圖未能載入，請檢查網絡連線。下方地點清單仍可使用。';
   const MODE_NOTE_2D = '撳「3D」才會連線至 OpenFreeMap 載入立體樓宇。';
-  const MODE_NOTE_3D = (FOCUS_ONLY ? '撳地點先見到立體樓宇。' : '') + '兩指上下拖動可傾斜，兩指扭轉可旋轉。';
+  const MODE_NOTE_3D = (FOCUS_ONLY ? '立體樓宇只顯示揀咗嘅地點附近。' : '') + '兩指上下拖動可傾斜，兩指扭轉可旋轉。';
 
   const markers = new Map();
   let map = null;
@@ -895,6 +895,7 @@ ul.plain strong { font-weight: 700; }
       g.hidden = !(type === 'all' || g.dataset.type === type);
     });
     const shown = syncMarkers();
+    if (focusPlace && shown.indexOf(focusPlace) < 0) focus3(null);    // 選咗嘅地點被篩走
     if (mode === '3d' && map3) fit3(shown, animate);
     else if (map) fitTo(shown, animate);
   }
@@ -979,7 +980,14 @@ ul.plain strong { font-weight: 700; }
 
   const EMPTY_FC = { type: 'FeatureCollection', features: [] };
   const BLDG_IDS = ['kt-bldg-walls', 'kt-bldg-roofs'];
-  let bldgBase;     // 樣式原本嘅樓宇篩選（冇就係 undefined）
+  // 篩選一律自己用新式（expression）語法寫，唔抄樣式原本嘅篩選：
+  // 樣式如果用舊式語法，同 distance 條件合併就會報錯、篩選失效，樓宇就一幢都唔出。
+  const BLDG_BASE = ['!=', ['get', 'hide_3d'], true];
+  const BLDG_NONE = ['==', ['literal', 1], 0];      // 恆為 false（純數字比較會被當成舊式語法而報錯）
+  const NOBLDG_NOTE = '呢個範圍內搵唔到樓宇資料，改為顯示全部立體樓宇。座標未核對，或者 OpenStreetMap 未有呢度嘅樓宇資料。';
+  let bldgOk = false;       // 樓宇圖層建立成功
+  let focusPlace = null;    // 而家揀咗邊個地點。關 popup 唔會取消（關 popup 先睇到樓宇），揀第二個、轉篩選、切返平面先會變
+  let checkToken = 0;
 
   function circleFeature(p, r, color) {
     const pts = [], dLat = r / 111320, dLng = r / (111320 * Math.cos(p.lat * Math.PI / 180));
@@ -992,63 +1000,81 @@ ul.plain strong { font-weight: 700; }
 
   // 用 OpenFreeMap 圖磚嘅 building 資料（render_height／render_min_height）自己畫樓宇：
   // 平面輪廓（全部）＋ 範圍圈 ＋ 貼圖外牆 ＋ 純色屋頂（外牆同屋頂分兩層，窗格先唔會貼落屋頂）。
-  // 樣式自帶嘅 3D 樓宇圖層收起，改用我哋嘅。
+  // 全部建立成功之後，先收起樣式自帶嘅 3D 樓宇圖層；失敗就保留樣式自帶嗰層，用家至少睇到樓宇。
   function setup3DBuildings(m) {
     const layers = (m.getStyle() || {}).layers || [];
     const ext = layers.filter(function (l) { return l.type === 'fill-extrusion'; });
     const ref = ext[0] || layers.find(function (l) { return l['source-layer'] === 'building' && l.source; });
     if (!ref) return;
-    bldgBase = ext[0] ? ext[0].filter : undefined;
-    ext.forEach(function (l) { m.setLayoutProperty(l.id, 'visibility', 'none'); });
     const labelLayer = layers.find(function (l) { return l.type === 'symbol'; });
     const before = labelLayer ? labelLayer.id : undefined;     // 樓宇放喺文字下面
-
-    m.addImage('kt-tower', facadeTexture('tower'), { pixelRatio: 2 });
-    m.addImage('kt-lowrise', facadeTexture('low'), { pixelRatio: 2 });
-    m.addSource('kt-focus', { type: 'geojson', data: EMPTY_FC });
-
-    const base = { source: ref.source, minzoom: 14 };
+    const base = { source: ref.source, filter: BLDG_BASE };
     if (ref['source-layer']) base['source-layer'] = ref['source-layer'];
-    if (bldgBase) base.filter = bldgBase;
     const H = ['coalesce', ['get', 'render_height'], 12];
     const B = ['coalesce', ['get', 'render_min_height'], 0];
-    const ramp = function (v) { return ['interpolate', ['linear'], ['zoom'], 14, 0, 16, v]; };
+    const ramp = function (v) { return ['interpolate', ['linear'], ['zoom'], 13, 0, 15, v]; };   // 縮放 13 → 15 樓宇逐漸長high；總覽（約 13.9）都見到
 
-    m.addLayer(Object.assign({ id: 'kt-bldg-flat', type: 'fill', paint: { 'fill-color': '#D9CDBB', 'fill-opacity': 0.85 } }, base, { minzoom: 13 }), before);   // 總覽縮放（約 13.9）都要見到平面輪廓
-    m.addLayer({ id: 'kt-focus-fill', type: 'fill', source: 'kt-focus', paint: { 'fill-color': ['get', 'c'], 'fill-opacity': 0.18 } }, before);
-    m.addLayer({ id: 'kt-focus-line', type: 'line', source: 'kt-focus', paint: { 'line-color': ['get', 'c'], 'line-width': 2, 'line-dasharray': [2, 2] } }, before);
-    m.addLayer(Object.assign({ id: 'kt-bldg-walls', type: 'fill-extrusion', paint: {
-      'fill-extrusion-pattern': ['case', ['>=', H, 35], 'kt-tower', 'kt-lowrise'],     // 35 米或以上用高樓貼圖
-      'fill-extrusion-height': ramp(['max', B, ['-', H, 0.4]]),
-      'fill-extrusion-base': ramp(B),
-      'fill-extrusion-opacity': 1
-    } }, base), before);
-    m.addLayer(Object.assign({ id: 'kt-bldg-roofs', type: 'fill-extrusion', paint: {
-      'fill-extrusion-color': '#B9A895',
-      'fill-extrusion-height': ramp(H),
-      'fill-extrusion-base': ramp(['max', B, ['-', H, 0.4]]),
-      'fill-extrusion-opacity': 1
-    } }, base), before);
-    focus3(null);
+    try {
+      m.addImage('kt-tower', facadeTexture('tower'), { pixelRatio: 2 });
+      m.addImage('kt-lowrise', facadeTexture('low'), { pixelRatio: 2 });
+      m.addSource('kt-focus', { type: 'geojson', data: EMPTY_FC });
+      m.addLayer(Object.assign({ id: 'kt-bldg-flat', type: 'fill', minzoom: 13, paint: { 'fill-color': '#D9CDBB', 'fill-opacity': 0.85 } }, base), before);
+      m.addLayer({ id: 'kt-focus-fill', type: 'fill', source: 'kt-focus', paint: { 'fill-color': ['get', 'c'], 'fill-opacity': 0.18 } }, before);
+      m.addLayer({ id: 'kt-focus-line', type: 'line', source: 'kt-focus', paint: { 'line-color': ['get', 'c'], 'line-width': 2, 'line-dasharray': [2, 2] } }, before);
+      m.addLayer(Object.assign({ id: 'kt-bldg-walls', type: 'fill-extrusion', minzoom: 13, paint: {
+        'fill-extrusion-pattern': ['case', ['>=', H, 35], 'kt-tower', 'kt-lowrise'],     // 35 米或以上用高樓貼圖
+        'fill-extrusion-height': ramp(['max', B, ['-', H, 0.4]]),
+        'fill-extrusion-base': ramp(B),
+        'fill-extrusion-opacity': 1
+      } }, base), before);
+      m.addLayer(Object.assign({ id: 'kt-bldg-roofs', type: 'fill-extrusion', minzoom: 13, paint: {
+        'fill-extrusion-color': '#B9A895',
+        'fill-extrusion-height': ramp(H),
+        'fill-extrusion-base': ramp(['max', B, ['-', H, 0.4]]),
+        'fill-extrusion-opacity': 1
+      } }, base), before);
+    } catch (e) { /* 下面會檢查圖層有冇建立 */ }
+
+    const ok = ['kt-bldg-flat', 'kt-focus-fill', 'kt-focus-line', 'kt-bldg-walls', 'kt-bldg-roofs'].every(function (id) { return m.getLayer(id); });
+    if (!ok) {     // 有圖層建立失敗（例如表達式唔被接受）：清走我哋嘅，保留樣式自帶嘅 3D 樓宇
+      ['kt-bldg-roofs', 'kt-bldg-walls', 'kt-focus-line', 'kt-focus-fill', 'kt-bldg-flat'].forEach(function (id) { if (m.getLayer(id)) m.removeLayer(id); });
+      return;
+    }
+    ext.forEach(function (l) { m.setLayoutProperty(l.id, 'visibility', 'none'); });
+    bldgOk = true;
   }
 
-  // 選咗地點（p）：只立體顯示佢範圍內嘅樓宇，其他收起（淨係平面輪廓）；冇選：全部收起。
+  // 選咗地點（p）：只立體顯示佢範圍內嘅樓宇，其他收起（淨係平面輪廓）；p = null：全部收起。
   // FOCUS_ONLY = false：唔收起任何樓宇，只畫範圍圈。
   function focus3(p) {
-    if (!map3 || !map3.getLayer('kt-bldg-walls')) return;
-    let f = bldgBase || null;
+    focusPlace = p;
+    checkToken++;
+    if (noteEl.textContent === NOBLDG_NOTE) hideMapNote();
+    if (!bldgOk || !map3) return;
+    let f = BLDG_BASE;
     if (p) {
       const t = TYPES[p.type];
-      if (FOCUS_ONLY) {
-        const near = ['<=', ['distance', { type: 'Point', coordinates: [p.lng, p.lat] }], t.r];
-        f = bldgBase ? ['all', bldgBase, near] : near;
-      }
+      if (FOCUS_ONLY) f = ['all', BLDG_BASE, ['<=', ['distance', { type: 'Point', coordinates: [p.lng, p.lat] }], t.r]];
       map3.getSource('kt-focus').setData(circleFeature(p, t.r, t.color));
     } else {
-      if (FOCUS_ONLY) f = ['==', ['literal', 1], 0];     // 恆為 false（純數字比較會被當成舊式篩選語法而報錯）
+      if (FOCUS_ONLY) f = BLDG_NONE;
       map3.getSource('kt-focus').setData(EMPTY_FC);
     }
     BLDG_IDS.forEach(function (id) { map3.setFilter(id, f); });
+    if (p && FOCUS_ONLY) check3(p);
+  }
+
+  // 圖磚載完之後數一數：範圍內一幢立體樓宇都冇（座標偏咗、或者 OSM 未有資料），就改為顯示全部立體樓宇並提示，
+  // 唔好畀用家對住一幅乜都冇嘅地圖。
+  function check3(p) {
+    const token = checkToken;
+    map3.once('idle', function () {
+      if (token !== checkToken || focusPlace !== p || !map3) return;
+      if (map3.queryRenderedFeatures({ layers: ['kt-bldg-walls'] }).length > 0) return;
+      BLDG_IDS.forEach(function (id) { map3.setFilter(id, BLDG_BASE); });
+      showMapNote(NOBLDG_NOTE);
+      setTimeout(function () { if (noteEl.textContent === NOBLDG_NOTE) hideMapNote(); }, 9000);
+    });
   }
 
   function popupMax3() {
@@ -1111,7 +1137,7 @@ ul.plain strong { font-weight: 700; }
         }
         setTimeout(revealPopup, 950);
       });
-      popup.on('close', function () { setActive(null); focus3(null); });
+      popup.on('close', function () { setActive(null); });     // 唔取消選取：關咗 popup 先睇到樓宇
       markers3.set(p.id, new ml.Marker({ element: el, anchor: 'center' }).setLngLat([p.lng, p.lat]).setPopup(popup));
     });
   }
@@ -1119,7 +1145,8 @@ ul.plain strong { font-weight: 700; }
   function teardown3() {
     if (map3) { map3.remove(); map3 = null; }
     markers3.clear();
-    bldgBase = undefined;
+    bldgOk = false;
+    focusPlace = null;
     map3Promise = null;
   }
 
@@ -1129,12 +1156,11 @@ ul.plain strong { font-weight: 700; }
     map3Promise = loadMapLibre().then(function (ml) {
       return new Promise(function (resolve, reject) {
         const timer = setTimeout(function () { reject(new Error('timeout')); }, 20000);
+        const start = visiblePlaces(currentFilter)[0];       // 一開 3D 就預設揀第一個地點（通常係集合點），即刻有樓宇睇
         const m = new ml.Map({
           container: el3,
           style: OFM_STYLE,
-          bounds: boundsOf(ml, visiblePlaces(currentFilter)),
-          fitBoundsOptions: { padding: 48, maxZoom: 16.5 },
-          pitch: 45, bearing: 0,
+          center: [start.lng, start.lat], zoom: 16, pitch: 55, bearing: 0,
           maxBounds: ML_BOUNDS,           // 鎖定喺觀塘區
           minZoom: 13, maxZoom: 18, maxPitch: 70,
           attributionControl: false,
@@ -1148,7 +1174,7 @@ ul.plain strong { font-weight: 700; }
         m.addControl(new ml.AttributionControl({ compact: false }), 'bottom-right');
         m.once('load', function () {
           clearTimeout(timer);
-          try { setup3DBuildings(m); } catch (err) { /* 樓宇圖層出事都要保住地圖同標記 */ }
+          try { setup3DBuildings(m); focus3(start); } catch (err) { /* 樓宇圖層出事都要保住地圖同標記 */ }
           build3DMarkers(ml);
           resolve(m);
         });
