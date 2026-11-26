@@ -222,6 +222,12 @@ ul.plain strong { font-weight: 700; }
 .view-toggle button + button { border-left: 2px solid var(--line); }
 .view-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .card .mode-note { margin: 0 0 12px; color: var(--muted); }
+.old-toggle {
+  display: inline-flex; align-items: center; min-height: 44px; margin: 0 0 12px; padding: 0 18px;
+  border: 2px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text);
+  font: inherit; font-weight: 500; cursor: pointer;
+}
+.old-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
 
 /* MapLibre（3D）：同平面地圖一樣，字體 >= 16px，用返同一套顏色（MapLibre 嘅 CSS 後載入，所以加 #map3d-canvas 提高優先級）*/
 #map3d-canvas { font: inherit; font-size: 1rem; }
@@ -402,6 +408,8 @@ ul.plain strong { font-weight: 700; }
       <button type="button" data-mode="3d" aria-pressed="false">3D</button>
     </div>
     <p class="mode-note" id="mode-note">撳「3D」才會連線至 OpenFreeMap 載入立體樓宇。</p>
+    <button type="button" class="old-toggle" id="old-toggle" aria-pressed="false" hidden>舊裕民坊（示意）</button>
+    <p class="mode-note" id="old-note" hidden>示意：輪廓取自拆卸後空地嘅形狀，約 8 層高係按相片推算，位置同大細都未核實，並非實測。</p>
     <div class="map-wrap" id="map-wrap">
       <div id="map-canvas" role="region" aria-label="地圖"></div>
       <div id="map3d-canvas" role="region" aria-label="3D 地圖" hidden></div>
@@ -580,6 +588,29 @@ ul.plain strong { font-weight: 700; }
   // 長方形估算，唔係官方區界，亦要夠大（手機總覽視窗約 3 公里高），否則 popup 搬唔到位。
   const KT_BOUNDS = [[22.292, 114.202], [22.336, 114.254]];
 
+  // 舊裕民坊（示意）。全部都未核實，唔係測量資料：
+  // - plots：喺「拆卸後」衛星圖（864×667 像素）描出嘅 8 塊空地輪廓，[像素 x, 像素 y]。假設空地 ≈ 舊樓地基，邊塊係邊幢舊樓未配對。
+  // - mPerPx：每像素幾多米。假設 8 塊空地 ≈ 市建局第四及第五發展區（27.55 萬平方呎），推算得 0.88。
+  // - anchor：衛星圖上 (px, py) 對應嘅地理位置，暫用 PLACES 嘅「裕民坊」，待用地標座標校正；圖假設正北向上。
+  // - heightM：約 8 層 × 3 米，按微影模型相同 1993 年街景相推算，唔係實測。
+  const OLD_YM = {
+    verified: false, // 待核對
+    anchor: { lat: 22.3125, lng: 114.2255, px: 420, py: 300 },   // 待核對
+    mPerPx: 0.88,                                                  // 待核對
+    heightM: 24,                                                   // 待核對
+    plots: [                                                       // 待核對
+      [[248,150],[303,150],[305,178],[262,180],[239,182]],
+      [[328,148],[377,148],[377,192],[328,192]],
+      [[380,145],[492,145],[492,162],[513,162],[513,201],[482,201],[482,172],[410,172],[410,192],[380,192]],
+      [[328,206],[475,206],[475,238],[328,238]],
+      [[200,252],[213,225],[279,267],[279,197],[310,195],[310,287],[300,313],[280,327]],
+      [[400,243],[477,243],[477,273],[413,277],[398,294],[379,273]],
+      [[482,205],[527,205],[530,303],[538,363],[513,397],[493,377],[503,307],[482,303]],
+      [[313,340],[350,283],[372,293],[337,352]]
+    ]
+  };
+  const OLD_HIDE_R = 350;   // 開咗舊裕民坊：舊址 350 米內收起而家嘅樓宇，唔好同舊樓疊埋
+
   // 3D 樓宇地圖：MapLibre GL JS（撳「3D」先載入）＋ OpenFreeMap（免 key，免費、冇服務保證）
   const ML_BASE = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/';
   const OFM_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -608,6 +639,8 @@ ul.plain strong { font-weight: 700; }
   const modeBtns = Array.prototype.slice.call(document.querySelectorAll('[data-mode]'));
   const modeNote = document.getElementById('mode-note');
   const el3 = document.getElementById('map3d-canvas');
+  const oldBtn = document.getElementById('old-toggle');
+  const oldNote = document.getElementById('old-note');
   const TILE_NOTE = '地圖底圖未能載入，請檢查網絡連線。下方地點清單仍可使用。';
   const MODE_NOTE_2D = '撳「3D」才會連線至 OpenFreeMap 載入立體樓宇。';
   const MODE_NOTE_3D = (FOCUS_ONLY ? '立體樓宇只顯示揀咗嘅地點附近。' : '') + '兩指上下拖動可傾斜，兩指扭轉可旋轉。';
@@ -621,6 +654,8 @@ ul.plain strong { font-weight: 700; }
   let map3 = null;              // MapLibre 地圖
   const markers3 = new Map();   // 3D 地圖嘅標記
   let switching = false;
+  let oldOn = false;            // 「舊裕民坊（示意）」開關
+  let oldReady = false;         // 舊裕民坊圖層建立成功
 
   /* ---------- 地點清單 ---------- */
   function buildList() {
@@ -967,6 +1002,15 @@ ul.plain strong { font-weight: 700; }
         g.fillStyle = rnd() < 0.12 ? '#F3C97A' : '#7C93A8';
         g.fillRect(x * 8 + 2, y * 8 + 2, 4, 5);
       }
+    } else if (kind === 'old') {                    // 舊裕民坊（示意）：每層一條露台線、四格窗、間中有冷氣機。顏色只係示意
+      g.fillStyle = '#E4D5BC'; g.fillRect(0, 0, S, S);
+      for (let y = 0; y < 8; y++) {
+        g.fillStyle = '#B9A58A'; g.fillRect(0, y * 16, S, 2);
+        for (let x = 0; x < 4; x++) {
+          g.fillStyle = '#6F7F8C'; g.fillRect(x * 32 + 7, y * 16 + 4, 18, 9);
+          if (rnd() < 0.35) { g.fillStyle = '#9A9A92'; g.fillRect(x * 32 + 10, y * 16 + 10, 10, 5); }
+        }
+      }
     } else {                                        // 低層（例如工廠大廈、商場）：橫向長窗
       g.fillStyle = '#D8C6AE'; g.fillRect(0, 0, S, S);
       for (let y = 0; y < 8; y++) {
@@ -976,6 +1020,29 @@ ul.plain strong { font-weight: 700; }
       }
     }
     return g.getImageData(0, 0, S, S);
+  }
+
+  // 衛星圖像素 → 經緯度（正北向上、平面近似）
+  function oldLngLat(px, py) {
+    const a = OLD_YM.anchor, m = OLD_YM.mPerPx;
+    return [a.lng + ((px - a.px) * m) / (111320 * Math.cos(a.lat * Math.PI / 180)), a.lat - ((py - a.py) * m) / 111320];
+  }
+  function oldGeoJSON() {
+    return { type: 'FeatureCollection', features: OLD_YM.plots.map(function (poly, i) {
+      const ring = poly.map(function (q) { return oldLngLat(q[0], q[1]); });
+      ring.push(ring[0]);
+      return { type: 'Feature', properties: { n: i + 1, h: OLD_YM.heightM }, geometry: { type: 'Polygon', coordinates: [ring] } };
+    }) };
+  }
+  const OLD_CENTER = (function () {
+    let sx = 0, sy = 0, n = 0;
+    OLD_YM.plots.forEach(function (poly) { poly.forEach(function (q) { sx += q[0]; sy += q[1]; n++; }); });
+    return oldLngLat(sx / n, sy / n);
+  })();
+  const OLD_IDS = ['kt-old-flat', 'kt-old-walls', 'kt-old-roofs'];
+  function distM(a, b) {      // 兩點相距幾多米（[經度, 緯度]，平面近似）
+    const dx = (a[0] - b[0]) * 111320 * Math.cos(a[1] * Math.PI / 180), dy = (a[1] - b[1]) * 111320;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
   const EMPTY_FC = { type: 'FeatureCollection', features: [] };
@@ -1044,6 +1111,14 @@ ul.plain strong { font-weight: 700; }
     bldgOk = true;
   }
 
+  // 而家樓宇嘅篩選。開咗舊裕民坊：舊址 350 米內收起而家嘅樓宇。篩選一律用新式語法自己寫。
+  function bldgFilter(near) {
+    const c = [BLDG_BASE];
+    if (oldOn) c.push(['>', ['distance', { type: 'Point', coordinates: OLD_CENTER }], OLD_HIDE_R]);
+    if (near) c.push(near);
+    return c.length > 1 ? ['all'].concat(c) : BLDG_BASE;
+  }
+
   // 選咗地點（p）：只立體顯示佢範圍內嘅樓宇，其他收起（淨係平面輪廓）；p = null：全部收起。
   // FOCUS_ONLY = false：唔收起任何樓宇，只畫範圍圈。
   function focus3(p) {
@@ -1051,16 +1126,18 @@ ul.plain strong { font-weight: 700; }
     checkToken++;
     if (noteEl.textContent === NOBLDG_NOTE) hideMapNote();
     if (!bldgOk || !map3) return;
-    let f = BLDG_BASE;
+    let f;
     if (p) {
       const t = TYPES[p.type];
-      if (FOCUS_ONLY) f = ['all', BLDG_BASE, ['<=', ['distance', { type: 'Point', coordinates: [p.lng, p.lat] }], t.r]];
+      const near = ['<=', ['distance', { type: 'Point', coordinates: [p.lng, p.lat] }], t.r];
+      f = bldgFilter(FOCUS_ONLY ? near : null);
       map3.getSource('kt-focus').setData(circleFeature(p, t.r, t.color));
     } else {
-      if (FOCUS_ONLY) f = BLDG_NONE;
+      f = FOCUS_ONLY ? BLDG_NONE : bldgFilter(null);
       map3.getSource('kt-focus').setData(EMPTY_FC);
     }
     BLDG_IDS.forEach(function (id) { map3.setFilter(id, f); });
+    map3.setFilter('kt-bldg-flat', oldOn ? bldgFilter(null) : BLDG_BASE);
     if (p && FOCUS_ONLY) check3(p);
   }
 
@@ -1070,12 +1147,52 @@ ul.plain strong { font-weight: 700; }
     const token = checkToken;
     map3.once('idle', function () {
       if (token !== checkToken || focusPlace !== p || !map3) return;
+      if (!map3.getBounds().contains([p.lng, p.lat])) return;                   // 所選地點唔喺畫面入面（例如鏡頭飛咗去第度），數唔準，唔做
+      if (oldOn && distM([p.lng, p.lat], OLD_CENTER) <= OLD_HIDE_R) return;    // 舊址一帶而家嘅樓宇係特登收起，唔好誤報「冇資料」
       if (map3.queryRenderedFeatures({ layers: ['kt-bldg-walls'] }).length > 0) return;
-      BLDG_IDS.forEach(function (id) { map3.setFilter(id, BLDG_BASE); });
+      BLDG_IDS.forEach(function (id) { map3.setFilter(id, bldgFilter(null)); });
       showMapNote(NOBLDG_NOTE);
       setTimeout(function () { if (noteEl.textContent === NOBLDG_NOTE) hideMapNote(); }, 9000);
     });
   }
+
+  // 舊裕民坊（示意）：8 塊空地輪廓拉高成 8 層。外牆貼圖同屋頂分兩層，同而家樓宇一樣做法。預設收起，撳掣先顯示。
+  function setupOldYM(m) {
+    const layers = (m.getStyle() || {}).layers || [];
+    const labelLayer = layers.find(function (l) { return l.type === 'symbol'; });
+    const before = labelLayer ? labelLayer.id : undefined;
+    const vis = oldOn ? 'visible' : 'none';
+    const ramp = function (v) { return ['interpolate', ['linear'], ['zoom'], 13, 0, 15, v]; };
+    try {
+      if (!m.hasImage('kt-old')) m.addImage('kt-old', facadeTexture('old'), { pixelRatio: 2 });
+      m.addSource('kt-old-ym', { type: 'geojson', data: oldGeoJSON() });
+      m.addLayer({ id: 'kt-old-flat', type: 'fill', source: 'kt-old-ym', layout: { visibility: vis }, paint: { 'fill-color': '#CDBB9F', 'fill-opacity': 0.9 } }, before);
+      m.addLayer({ id: 'kt-old-walls', type: 'fill-extrusion', source: 'kt-old-ym', minzoom: 13, layout: { visibility: vis }, paint: {
+        'fill-extrusion-pattern': 'kt-old', 'fill-extrusion-base': 0,
+        'fill-extrusion-height': ramp(['-', ['get', 'h'], 0.4]), 'fill-extrusion-opacity': 1
+      } }, before);
+      m.addLayer({ id: 'kt-old-roofs', type: 'fill-extrusion', source: 'kt-old-ym', minzoom: 13, layout: { visibility: vis }, paint: {
+        'fill-extrusion-color': '#B39F86',
+        'fill-extrusion-base': ramp(['-', ['get', 'h'], 0.4]), 'fill-extrusion-height': ramp(['get', 'h']), 'fill-extrusion-opacity': 1
+      } }, before);
+    } catch (e) { /* 下面會檢查 */ }
+    oldReady = OLD_IDS.every(function (id) { return m.getLayer(id); });
+    if (!oldReady) {
+      OLD_IDS.slice().reverse().forEach(function (id) { if (m.getLayer(id)) m.removeLayer(id); });
+      if (m.getSource('kt-old-ym')) m.removeSource('kt-old-ym');
+    }
+  }
+
+  function setOld(on) {
+    oldOn = on;
+    oldBtn.setAttribute('aria-pressed', String(on));
+    oldNote.hidden = !(on && mode === '3d');
+    if (!map3 || !oldReady) return;
+    OLD_IDS.forEach(function (id) { map3.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); });
+    focus3(focusPlace);       // 重算而家樓宇嘅篩選（舊址一帶收起）
+    if (on) map3.flyTo({ center: OLD_CENTER, zoom: 16.2, pitch: 55, bearing: 0, duration: reduceMotion ? 0 : 1200 });
+  }
+  oldBtn.addEventListener('click', function () { setOld(!oldOn); });
 
   function popupMax3() {
     return Math.max(150, Math.min(260, el3.clientWidth - 64));   // 64 = 左邊控件 50 + 右邊空位 14，咁橫向一定避得開控件
@@ -1146,6 +1263,7 @@ ul.plain strong { font-weight: 700; }
     if (map3) { map3.remove(); map3 = null; }
     markers3.clear();
     bldgOk = false;
+    oldReady = false;
     focusPlace = null;
     map3Promise = null;
   }
@@ -1174,7 +1292,9 @@ ul.plain strong { font-weight: 700; }
         m.addControl(new ml.AttributionControl({ compact: false }), 'bottom-right');
         m.once('load', function () {
           clearTimeout(timer);
-          try { setup3DBuildings(m); focus3(start); } catch (err) { /* 樓宇圖層出事都要保住地圖同標記 */ }
+          try { setup3DBuildings(m); } catch (err) { /* 樓宇圖層出事都要保住地圖同標記 */ }
+          try { setupOldYM(m); } catch (err) { /* 舊裕民坊出事唔好影響地圖 */ }
+          try { focus3(start); } catch (err) { /* 同上 */ }
           build3DMarkers(ml);
           resolve(m);
         });
@@ -1190,6 +1310,8 @@ ul.plain strong { font-weight: 700; }
   function setModeUI(m) {
     modeBtns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.mode === m)); });
     modeNote.textContent = m === '3d' ? MODE_NOTE_3D : MODE_NOTE_2D;
+    oldBtn.hidden = !(m === '3d' && oldReady);
+    oldNote.hidden = !(m === '3d' && oldOn);
   }
 
   function show2D() {
