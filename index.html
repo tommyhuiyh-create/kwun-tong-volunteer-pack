@@ -145,13 +145,13 @@ ul.plain strong { font-weight: 700; }
 
 /* ========== 地圖 ========== */
 .map-wrap { position: relative; scroll-margin-top: calc(var(--nav-h) + 8px); }
-#map-canvas {
+#map-canvas, #map3d-canvas {
   position: relative; z-index: 0; isolation: isolate;   /* 令 Leaflet 嘅 z-index 唔會蓋住導覽列 */
   height: 60vh; height: 60svh; min-height: 320px;
   border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
   background: #E8E0D2;
 }
-@media (min-width: 720px) { #map-canvas { height: 480px; } }
+@media (min-width: 720px) { #map-canvas, #map3d-canvas { height: 480px; } }
 .map-note {
   position: absolute; z-index: 5; left: 12px; right: 12px; bottom: 48px;
   margin: 0 !important; padding: 10px 14px; border-radius: 10px;
@@ -211,6 +211,40 @@ ul.plain strong { font-weight: 700; }
 .leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out { font-size: 1.375rem; }
 @media (prefers-color-scheme: dark) {
   .leaflet-tile-pane { filter: brightness(.82) contrast(1.05) saturate(.9); }
+}
+
+/* 平面／3D 切換 */
+.view-toggle { display: inline-flex; margin: 0 0 8px; border: 2px solid var(--line); border-radius: 12px; overflow: hidden; }
+.view-toggle button {
+  min-height: 44px; min-width: 88px; padding: 0 18px; border: 0;
+  background: var(--card); color: var(--text); font: inherit; font-weight: 500; cursor: pointer;
+}
+.view-toggle button + button { border-left: 2px solid var(--line); }
+.view-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.card .mode-note { margin: 0 0 12px; color: var(--muted); }
+
+/* MapLibre（3D）：同平面地圖一樣，字體 >= 16px，用返同一套顏色（MapLibre 嘅 CSS 後載入，所以加 #map3d-canvas 提高優先級）*/
+#map3d-canvas { font: inherit; font-size: 1rem; }
+#map3d-canvas .maplibregl-ctrl-attrib { background: var(--attr-bg); color: var(--text); font-size: 1rem; line-height: 1.4; padding: 2px 8px; }
+#map3d-canvas .maplibregl-ctrl-attrib a { color: var(--link); }
+#map3d-canvas .maplibregl-ctrl-group { background: var(--card); border-radius: 8px; }
+#map3d-canvas .maplibregl-ctrl-group button { width: 40px; height: 40px; }
+#map3d-canvas .maplibregl-popup-content {
+  background: var(--card); color: var(--text); border-radius: 12px; padding: 12px 14px;
+  font: inherit; font-size: 1rem; line-height: 1.6; box-shadow: 0 3px 14px rgba(0, 0, 0, .4);
+}
+#map3d-canvas .maplibregl-popup-close-button { width: 40px; height: 40px; font-size: 1.5rem; color: var(--muted); }
+#map3d-canvas .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+#map3d-canvas .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+#map3d-canvas .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: var(--card); }
+#map3d-canvas .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+#map3d-canvas .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+#map3d-canvas .maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: var(--card); }
+#map3d-canvas .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--card); }
+#map3d-canvas .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--card); }
+@media (prefers-color-scheme: dark) {
+  #map3d-canvas canvas.maplibregl-canvas { filter: brightness(.82) contrast(1.05) saturate(.9); }
+  #map3d-canvas .maplibregl-ctrl-icon { filter: invert(1); }
 }
 
 /* 圖例 */
@@ -363,8 +397,14 @@ ul.plain strong { font-weight: 700; }
   <!-- 地圖 -->
   <section class="card" id="map" aria-labelledby="h-map">
     <h2 id="h-map">地圖</h2>
+    <div class="view-toggle" role="group" aria-label="地圖模式">
+      <button type="button" data-mode="2d" aria-pressed="true">平面</button>
+      <button type="button" data-mode="3d" aria-pressed="false">3D</button>
+    </div>
+    <p class="mode-note" id="mode-note">撳「3D」才會連線至 OpenFreeMap 載入立體樓宇。</p>
     <div class="map-wrap" id="map-wrap">
       <div id="map-canvas" role="region" aria-label="地圖"></div>
+      <div id="map3d-canvas" role="region" aria-label="3D 地圖" hidden></div>
       <p class="map-note" id="map-note" role="status" hidden>地圖底圖未能載入，請檢查網絡連線。下方地點清單仍可使用。</p>
     </div>
 
@@ -536,6 +576,14 @@ ul.plain strong { font-weight: 700; }
   // key 必須喺 Google Cloud 限制到呢個網址，並設預算上限。
   const GOOGLE_MAPS_API_KEY = '';
 
+  // 地圖鎖定喺觀塘區：平面同 3D 都唔可以拖出呢個範圍。[[南, 西], [北, 東]]
+  // 長方形估算，唔係官方區界，亦要夠大（手機總覽視窗約 3 公里高），否則 popup 搬唔到位。
+  const KT_BOUNDS = [[22.292, 114.202], [22.336, 114.254]];
+
+  // 3D 樓宇地圖：MapLibre GL JS（撳「3D」先載入）＋ OpenFreeMap（免 key，免費、冇服務保證）
+  const ML_BASE = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/';
+  const OFM_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+
   const TYPES = {
     meeting:  { label: '集合點',   size: 30, hit: 44, z: 1000 },
     route:    { label: '路線地點', size: 22, hit: 32, z: 500 },
@@ -552,11 +600,22 @@ ul.plain strong { font-weight: 700; }
   const stage3d = document.getElementById('view3d-stage');
   const note3d = document.getElementById('view3d-note');
   const filterBtns = Array.prototype.slice.call(document.querySelectorAll('[data-filter]'));
+  const modeBtns = Array.prototype.slice.call(document.querySelectorAll('[data-mode]'));
+  const modeNote = document.getElementById('mode-note');
+  const el3 = document.getElementById('map3d-canvas');
+  const TILE_NOTE = '地圖底圖未能載入，請檢查網絡連線。下方地點清單仍可使用。';
+  const MODE_NOTE_2D = '撳「3D」才會連線至 OpenFreeMap 載入立體樓宇。';
+  const MODE_NOTE_3D = '兩指上下拖動可傾斜，兩指扭轉可旋轉。';
 
   const markers = new Map();
   let map = null;
   let layer = null;
   let flyToken = 0;
+  let mode = '2d';              // '2d' 平面（Leaflet）｜ '3d' 立體樓宇（MapLibre）
+  let currentFilter = 'all';
+  let map3 = null;              // MapLibre 地圖
+  const markers3 = new Map();   // 3D 地圖嘅標記
+  let switching = false;
 
   /* ---------- 地點清單 ---------- */
   function buildList() {
@@ -726,7 +785,7 @@ ul.plain strong { font-weight: 700; }
 
   // popup 如果被黏頂導覽列遮住或者出咗畫面，就將頁面捲到睇得見
   function revealPopup() {
-    const el = document.querySelector('.leaflet-popup');
+    const el = document.querySelector(mode === '3d' ? '.maplibregl-popup' : '.leaflet-popup');
     if (!el) return;
     const r = el.getBoundingClientRect();
     const top = document.getElementById('nav').offsetHeight + 8;
@@ -753,6 +812,9 @@ ul.plain strong { font-weight: 700; }
     map = L.map(mapEl, {
       attributionControl: false,
       zoomSnap: 0.5,
+      maxBounds: KT_BOUNDS,         // 鎖定喺觀塘區
+      maxBoundsViscosity: 1,
+      minZoom: 14,
       scrollWheelZoom: false    // 桌面版：撳過地圖先可以用滾輪縮放，避免捲動頁面時誤觸
     });
     map.on('focus', function () { map.scrollWheelZoom.enable(); });
@@ -768,8 +830,8 @@ ul.plain strong { font-weight: 700; }
     }).addTo(map);
 
     let loaded = 0, failed = 0;
-    tiles.on('tileload', function () { loaded++; noteEl.hidden = true; });
-    tiles.on('tileerror', function () { failed++; if (!loaded && failed >= 3) noteEl.hidden = false; });
+    tiles.on('tileload', function () { loaded++; if (noteEl.textContent === TILE_NOTE) noteEl.hidden = true; });
+    tiles.on('tileerror', function () { failed++; if (!loaded && failed >= 3 && mode === '2d') showMapNote(TILE_NOTE); });
 
     layer = L.layerGroup().addTo(map);
 
@@ -802,21 +864,38 @@ ul.plain strong { font-weight: 700; }
     applyFilter('all', false);
   }
 
+  function showMapNote(text) { noteEl.textContent = text; noteEl.hidden = false; }
+  function hideMapNote() { noteEl.hidden = true; }
+
+  // 按目前篩選，同步兩個地圖嘅標記（隱藏緊嗰個亦同步，切換時就即刻準確）
+  function syncMarkers() {
+    const shown = visiblePlaces(currentFilter);
+    if (map) {
+      layer.clearLayers();
+      shown.forEach(function (p) { layer.addLayer(markers.get(p.id)); });
+    }
+    if (map3) {
+      markers3.forEach(function (m) { m.remove(); });
+      shown.forEach(function (p) { markers3.get(p.id).addTo(map3); });
+    }
+    return shown;
+  }
+
   function applyFilter(type, animate) {
+    currentFilter = type;
     filterBtns.forEach(function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.filter === type));
     });
     listEl.querySelectorAll('.group').forEach(function (g) {
       g.hidden = !(type === 'all' || g.dataset.type === type);
     });
-    if (!map) return;
-    const shown = visiblePlaces(type);
-    layer.clearLayers();
-    shown.forEach(function (p) { layer.addLayer(markers.get(p.id)); });
-    fitTo(shown, animate);
+    const shown = syncMarkers();
+    if (mode === '3d' && map3) fit3(shown, animate);
+    else if (map) fitTo(shown, animate);
   }
 
   function openPlace(id) {
+    if (mode === '3d') { openPlace3(id); return; }
     const m = markers.get(id);
     if (!m || !map) return;
     forced = -1;
@@ -834,6 +913,224 @@ ul.plain strong { font-weight: 700; }
     map.flyTo(target, zoom, { duration: 0.9 });
     setTimeout(open, 1600);   // 保險：如果 moveend 冇觸發
   }
+
+  /* ---------- 3D 樓宇地圖（撳「3D」先載入 MapLibre 同 OpenFreeMap）---------- */
+  const ML_BOUNDS = [[KT_BOUNDS[0][1], KT_BOUNDS[0][0]], [KT_BOUNDS[1][1], KT_BOUNDS[1][0]]];   // MapLibre 用 [經度, 緯度]
+  let mlLib = null, map3Promise = null;
+
+  function loadMapLibre() {
+    if (mlLib) return mlLib;
+    mlLib = new Promise(function (resolve, reject) {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = ML_BASE + 'maplibre-gl.css';
+      document.head.appendChild(css);
+      const s = document.createElement('script');
+      s.async = true;
+      s.src = ML_BASE + 'maplibre-gl.js';
+      s.onload = function () { if (window.maplibregl) resolve(window.maplibregl); else reject(new Error('nolib')); };
+      s.onerror = function () { s.remove(); css.remove(); mlLib = null; reject(new Error('load')); };   // 網絡問題：下次可以再試
+      document.head.appendChild(s);
+    });
+    return mlLib;
+  }
+
+  function boundsOf(ml, places) {
+    const pts = places.map(function (p) { return [p.lng, p.lat]; });
+    return pts.reduce(function (b, c) { return b.extend(c); }, new ml.LngLatBounds(pts[0], pts[0]));
+  }
+
+  function fit3(places, animate) {
+    if (!places.length) return;
+    map3.fitBounds(boundsOf(window.maplibregl, places), {
+      padding: 48, maxZoom: places.length > 1 ? 16.5 : 16, pitch: 45,
+      linear: true, duration: animate && !reduceMotion ? 700 : 0
+    });
+  }
+
+  // OpenFreeMap 嘅 liberty 樣式自帶 3D 樓宇；萬一冇，就用向量圖磚嘅 building 圖層補一層
+  function ensure3DBuildings(m) {
+    const layers = (m.getStyle() || {}).layers || [];
+    if (layers.some(function (l) { return l.type === 'fill-extrusion'; })) return;
+    const b = layers.find(function (l) { return l['source-layer'] === 'building' && l.source; });
+    if (!b) return;
+    m.addLayer({
+      id: 'kt-buildings-3d', type: 'fill-extrusion', source: b.source, 'source-layer': 'building', minzoom: 14,
+      paint: {
+        'fill-extrusion-color': '#d8c9b5',
+        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 12],
+        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+        'fill-extrusion-opacity': 0.92
+      }
+    });
+  }
+
+  function popupMax3() {
+    return Math.max(150, Math.min(260, el3.clientWidth - 64));   // 64 = 左邊控件 50 + 右邊空位 14，咁橫向一定避得開控件
+  }
+
+  // MapLibre 唔會自動搬地圖等 popup 完整，自己搬：
+  // 1) 唔好出到地圖上下左右邊；2) 避開左上角嘅放大／縮小／指南針掣。細機仔直向放唔晒就橫向避。
+  function fitPopup3(popup) {
+    const pe = popup.getElement();
+    if (!pe || !map3) return;
+    const c = el3.getBoundingClientRect();
+    const r = pe.getBoundingClientRect();
+    const attrEl = el3.querySelector('.maplibregl-ctrl-bottom-right');
+    const bottomLimit = c.bottom - (attrEl ? attrEl.getBoundingClientRect().height : 0) - 8;   // 版權欄喺 popup 上面，唔好俾佢蓋住
+    let sx = 0, sy = 0;                                   // popup 要向右／向下搬幾多 px
+    if (r.top < c.top + 8) sy = (c.top + 8) - r.top;
+    else if (r.bottom > bottomLimit) sy = bottomLimit - r.bottom;
+    if (r.left < c.left + 8) sx = (c.left + 8) - r.left;
+    else if (r.right > c.right - 4) sx = (c.right - 4) - r.right;
+    const ctlEl = el3.querySelector('.maplibregl-ctrl-top-left');
+    if (ctlEl) {
+      const k = ctlEl.getBoundingClientRect();
+      const left = r.left + sx, right = r.right + sx, top = r.top + sy, bottom = r.bottom + sy;
+      if (top < k.bottom + 4 && bottom > k.top && left < k.right + 6) {      // 搬完仍然疊住控件
+        if (right + (k.right + 6 - left) <= c.right - 4) sx += (k.right + 6) - left;   // 橫向搬開
+        else sy = Math.max(sy, (k.bottom + 4) - r.top);                                  // 橫向放唔落：搬到控件下面
+      }
+    }
+    if (sx || sy) map3.panBy([-sx, -sy], { duration: reduceMotion ? 0 : 300 });
+  }
+
+  function build3DMarkers(ml) {
+    PLACES.forEach(function (p) {
+      const t = TYPES[p.type];
+      const el = document.createElement('div');
+      el.className = 'pin-wrap';
+      el.style.width = el.style.height = t.hit + 'px';
+      el.style.zIndex = String(Math.round(t.z / 500));    // 集合點 > 路線地點 > 具體建築
+      el.innerHTML = '<span class="pin pin-' + p.type + '"></span>';
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', p.name);
+      el.title = p.name;
+      el.tabIndex = 0;
+      const popup = new ml.Popup({ offset: [0, -(t.size / 2 + 4)], maxWidth: popupMax3() + 'px', focusAfterOpen: false });
+      popup.setDOMContent(makePopup(p));
+      popup.on('open', function () {
+        markers3.forEach(function (other, oid) {           // MapLibre 容許同時開幾個 popup，我哋一次只開一個
+          const op = other.getPopup();
+          if (oid !== p.id && op && op.isOpen()) op.remove();
+        });
+        setActive(p.id);
+        if (map3.getZoom() < 15.5) {
+          // 總覽縮放級數已經係 maxBounds 容許嘅最細，搬唔郁；先放大去呢個地點，再搬 popup
+          map3.once('moveend', function () { fitPopup3(popup); });
+          map3.easeTo({ center: [p.lng, p.lat], zoom: 15.5, pitch: 55, duration: reduceMotion ? 0 : 500 });
+        } else {
+          requestAnimationFrame(function () { fitPopup3(popup); });
+        }
+        setTimeout(revealPopup, 950);
+      });
+      popup.on('close', function () { setActive(null); });
+      markers3.set(p.id, new ml.Marker({ element: el, anchor: 'center' }).setLngLat([p.lng, p.lat]).setPopup(popup));
+    });
+  }
+
+  function teardown3() {
+    if (map3) { map3.remove(); map3 = null; }
+    markers3.clear();
+    map3Promise = null;
+  }
+
+  // 建立 3D 地圖：容器一定要係顯示緊（有尺寸）先建立
+  function ensure3D() {
+    if (map3Promise) return map3Promise;
+    map3Promise = loadMapLibre().then(function (ml) {
+      return new Promise(function (resolve, reject) {
+        const timer = setTimeout(function () { reject(new Error('timeout')); }, 20000);
+        const m = new ml.Map({
+          container: el3,
+          style: OFM_STYLE,
+          bounds: boundsOf(ml, visiblePlaces(currentFilter)),
+          fitBoundsOptions: { padding: 48, maxZoom: 16.5 },
+          pitch: 45, bearing: 0,
+          maxBounds: ML_BOUNDS,           // 鎖定喺觀塘區
+          minZoom: 13, maxZoom: 18, maxPitch: 70,
+          attributionControl: false,
+          locale: {
+            'NavigationControl.ZoomIn': '放大', 'NavigationControl.ZoomOut': '縮小',
+            'NavigationControl.ResetBearing': '還原指北', 'Popup.Close': '關閉'
+          }
+        });
+        map3 = m;
+        m.addControl(new ml.NavigationControl({ visualizePitch: true }), 'top-left');
+        m.addControl(new ml.AttributionControl({ compact: false }), 'bottom-right');
+        m.once('load', function () {
+          clearTimeout(timer);
+          ensure3DBuildings(m);
+          build3DMarkers(ml);
+          resolve(m);
+        });
+        m.on('error', function (e) {       // 樣式（style）載入失敗先算失敗；個別圖磚出錯唔理
+          const u = e && e.error && e.error.url;
+          if (u && /\/styles\//.test(u)) { clearTimeout(timer); reject(e.error); }
+        });
+      });
+    }).catch(function (err) { teardown3(); throw err; });
+    return map3Promise;
+  }
+
+  function setModeUI(m) {
+    modeBtns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.mode === m)); });
+    modeNote.textContent = m === '3d' ? MODE_NOTE_3D : MODE_NOTE_2D;
+  }
+
+  function show2D() {
+    mode = '2d';
+    markers3.forEach(function (m) { const pp = m.getPopup(); if (pp && pp.isOpen()) pp.remove(); });
+    el3.hidden = true;
+    mapEl.hidden = false;
+    if (map) map.invalidateSize();
+    syncMarkers();
+    setModeUI('2d');
+  }
+
+  function setMode(next) {
+    if (next === mode || switching) return;
+    if (next === '2d') { hideMapNote(); show2D(); return; }
+    switching = true;
+    if (map) map.closePopup();
+    mapEl.hidden = true;
+    el3.hidden = false;
+    showMapNote('載入 3D 地圖中……');
+    ensure3D().then(function () {
+      mode = '3d';
+      map3.resize();
+      syncMarkers();
+      setModeUI('3d');
+      hideMapNote();
+    }).catch(function () {
+      el3.hidden = true;
+      mapEl.hidden = false;
+      if (map) map.invalidateSize();
+      setModeUI('2d');
+      showMapNote('3D 地圖未能載入，已返回平面地圖。');
+      setTimeout(function () { if (noteEl.textContent === '3D 地圖未能載入，已返回平面地圖。') hideMapNote(); }, 6000);
+    }).then(function () { switching = false; });
+  }
+
+  function openPlace3(id) {
+    const m = markers3.get(id);
+    const p = PLACES.find(function (x) { return x.id === id; });
+    if (!m || !p || !map3) return;
+    forced = -1;
+    wrapEl.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    const pop = m.getPopup();
+    const token = ++flyToken;
+    function open() { if (token === flyToken && !pop.isOpen()) m.togglePopup(); }
+    const cam = { center: [p.lng, p.lat], zoom: Math.max(map3.getZoom(), 16.5), pitch: 60 };
+    if (reduceMotion) { map3.jumpTo(cam); open(); return; }
+    map3.once('moveend', open);
+    map3.flyTo(Object.assign({ duration: 1000 }, cam));   // 唔用 offset：傾斜視角下 offset 唔準，popup 位置由 fitPopup3 搬
+    setTimeout(open, 1800);   // 保險：如果 moveend 冇觸發
+  }
+
+  modeBtns.forEach(function (b) {
+    b.addEventListener('click', function () { setMode(b.dataset.mode); });
+  });
 
   /* ---------- 篩選掣 ---------- */
   filterBtns.forEach(function (b) {
@@ -881,7 +1178,7 @@ ul.plain strong { font-weight: 700; }
   /* ---------- 啟動 ---------- */
   buildList();
   if (typeof L === 'undefined') {
-    noteEl.hidden = false;      // Leaflet 載入唔到：清單仍然可以睇
+    showMapNote(TILE_NOTE);     // Leaflet 載入唔到：清單仍然可以睇
   } else {
     buildMap();
   }
